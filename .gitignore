@@ -1,0 +1,15 @@
+# Entorno virtual de Python (muy pesado)
+venv/
+env/
+*.venv/
+
+# Bases de datos y archivos locales de SQLite
+data/*.db
+*.sqlite3
+*.db-journal
+
+# Archivos del sistema y cachés de Python
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
