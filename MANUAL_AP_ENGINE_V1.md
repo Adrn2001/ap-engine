@@ -117,4 +117,103 @@ Para los tiros de esquina, el sistema aplica una segunda simulación de Poisson 
 $$C_{total} \sim \text{Poisson}(\bar{C}_L, N) + \text{Poisson}(\bar{C}_V, N) \implies P(\text{Over 9.5 Córners}) = \frac{1}{N} \sum_{j=1}^{N} \mathbb{I}(C_{total, j} > 9.5) \times 100$$
 
 ---
-*Fin de la Parte 1 (Secciones 1 a 3). Las Secciones 4 a 7 profundizan en las matemáticas del Criterio de Kelly, la taxonomía de los reportes y la hoja de ruta hacia Machine Learning.*
+---
+
+## SECCIÓN 4: DETECCIÓN DE INEFICIENCIAS Y VALUE BETTING
+
+### 4.1. Conversión de Cuotas Decimales a Probabilidad Implícita
+Una cuota o momio decimal ($O$) expresa el retorno bruto que paga un corredor de apuestas por cada unidad monetaria apostada. Matemáticamente, toda cuota encierra una **Probabilidad Implícita ($P_{imp}$)** estimada por la casa de apuestas, a la cual se le añade un margen de beneficio comercial conocido como *Vigorish*, *Overround* o *Juice*.
+
+La probabilidad implícita de una cuota decimal para un evento $E$ se calcula como:
+
+$$P_{imp}(E) = \frac{1}{O_E} \times 100$$
+
+Un mercado es matemáticamente eficiente para la casa de apuestas cuando la suma de las probabilidades implícitas de todos los resultados posibles supera el $100\%$ (el exceso representa la comisión del bookie):
+
+$$\sum P_{imp} = \left( \frac{1}{O_{Local}} + \frac{1}{O_{Empate}} + \frac{1}{O_{Visita}} \right) \times 100 > 100\%$$
+
+### 4.2. El Cálculo de la Esperanza Matemática ($EV$) y el Edge
+El principio fundacional de **AP Engine** establece que **nunca se debe apostar en un evento donde no exista un Edge (ventaja) matemático positivo**, independientemente de la confianza subjetiva o la popularidad del equipo.
+
+El **Valor Esperado ($EV$, por sus siglas en inglés *Expected Value*)** representa la ganancia o pérdida promedio que un apostador obtendría por unidad apostada si un mismo evento se repitiera infinitas veces bajo idénticas condiciones de cuota y probabilidad.
+
+Para una apuesta con probabilidad verdadera estimada por el motor $p = \frac{P_{engine}}{100}$ y una cuota decimal $O$, la ecuación del Valor Esperado es:
+
+$$EV = (p \times O) - 1$$
+
+O expresado en términos de porcentaje de ventaja monetaria sobre la línea:
+
+$$EV_{\%} = \left[ (p \times O) - 1 \right] \times 100$$
+
+* **Si $EV > 0$:** Existe una **Ineficiencia de Mercado (Value Bet)**. El corredor de apuestas está subestimando la probabilidad del evento y ofreciendo una cuota superior al valor justo. Es una inversión con esperanza matemática positiva a largo plazo.
+* **Si $EV \le 0$:** El mercado no ofrece valor o la casa de apuestas tiene una ventaja matemática insuperable. **La orden del motor es estricta: NO APOSTAR.**
+
+### 4.3. El Criterio de Kelly (Gestión de Riesgo Actuarial)
+Una vez detectada una apuesta con $EV > 0$, el riesgo primordial de todo sistema cuantitativo no es la falta de aciertos, sino la **mala gestión del tamaño de posición (Staking Policy)** que pueda conducir a la ruina de capital en una racha de varianza negativa (*Drawdown*).
+
+Para mitigar este riesgo y maximizar la tasa de crecimiento compuesto del *Bankroll* (capital total disponible), AP Engine implementa el **Criterio de Kelly**, un algoritmo de optimización actuarial desarrollado por John L. Kelly Jr. en los Laboratorios Bell en 1956.
+
+La fracción de capital óptima a apostar ($f^*$) se calcula con la fórmula:
+
+$$f^* = \frac{b \times p - q}{b}$$
+
+Donde:
+* $f^*$: Porcentaje del capital total que se debe arriesgar en la operación.
+* $p$: Probabilidad real de éxito estimada por AP Engine ($p = \frac{P_{engine}}{100}$).
+* $q$: Probabilidad real de fracaso ($q = 1 - p$).
+* $b$: Cuota neta o ganancia limpia por cada dólar apostado ($b = O - 1$).
+
+#### La Política de "Fracción de Kelly" (Half-Kelly / Quarter-Kelly):
+El Criterio de Kelly puro ($1.0 \times f^*$) asume que las probabilidades estimadas por el modelo son matemáticamente perfectas. En la práctica, al modelar deportes con alta varianza como el fútbol, es imperativo protegerse contra el error de estimación del modelo y reducir la volatilidad del capital.
+
+Por normativa de gestión de riesgo, **AP Engine v1.0 opera de forma predeterminada bajo una política de "Medio Kelly" ($0.5 \times f^*$) o "Cuarto de Kelly" ($0.25 \times f^*$)**:
+
+$$\text{Stake en USD} = \text{Bankroll Total} \times \left( \max\left[0.0, \; \frac{b \times p - q}{b}\right] \times \text{Fracción} \right)$$
+
+### 4.4. Políticas de "No Bet" y Preservación de Capital
+El algoritmo cuenta con cláusulas de bloqueo automáticas que anulan cualquier recomendación de inversión, incluso si las cuotas muestran un ligero $EV$ positivo:
+1. **Filtro de Ruido Estadístico ($EV < +2.5\%$):** Si el valor esperado positivo es menor al $2.5\%$, se considera dentro del margen de error del cálculo probabilístico de Monte Carlo. Se etiqueta como `"SIN VALOR SUFICIENTE"`.
+2. **Filtro de Lesiones Múltiples:** Si un equipo presenta 3 o más lesiones clave ($L_i \ge 3$), el nivel de incertidumbre estructural del equipo se considera demasiado alto para un modelo paramétrico simple. El motor emite una alerta de `"ALTA VOLATILIDAD - NO BET"`.
+
+---
+
+## SECCIÓN 5: PROTOCOLO DE ANÁLISIS DE MERCADOS Y GENERACIÓN DE PICKS
+
+### 5.1. Taxonomía de Mercados Evaluados
+Para no limitar el análisis a los mercados de volumen tradicional (que suelen ser los más eficientes y difíciles de vencer), el motor escanea sistemáticamente un portafolio multi-mercado:
+* **Mercados Primarios (1X2 y Doble Oportunidad):** Evaluación directa de Ganador Local, Empate y Ganador Visitante.
+* **Mercados Totales (Over / Under):** Escaneo de las líneas de goles ($\pm 1.5, \pm 2.5, \pm 3.5$) evaluando la distribución agregada de Poisson de ambos equipos.
+* **Mercados Derivados y Disciplinarios:** Proyección estocástica de Tiros de Esquina ($\pm 8.5, \pm 9.5, \pm 10.5$) y análisis condicional de tarjetas y faltas para partidos de alta fricción o clásicos de liga.
+
+### 5.2. Estructura Estándar del Reporte de Salida (AP Predictions)
+Cada vez que el motor analiza un encuentro de forma local o en la interfaz web de Streamlit, genera un reporte estructurado bajo un estándar inmutable de análisis profesional:
+
+```text
+================================================================================
+⚽ AP ENGINE PRO REPORT | ANÁLISIS CUANTITATIVO DE PARTIDO
+================================================================================
+Encuentro: [Equipo Local] vs [Equipo Visitante]
+Liga / Torneo: [Nombre de la Competición] | Fecha: [YYYY-MM-DD]
+AP Index (Grado de Confianza del Modelo): [0-100] / 100
+--------------------------------------------------------------------------------
+1. ANÁLISIS ALGORÍTMICO Y FUERZA ESPERADA (xG)
+   • xG Ajustado Estimado: [Local] (xG: X.XX) vs [Visitante] (xG: X.XX)
+   • Simulación Monte Carlo: 10,000 iteraciones ejecutadas con éxito.
+   • Probabilidades 1X2: Local [XX.X%] | Empate [XX.X%] | Visita [XX.X%]
+
+2. ESCANEO DE VALOR ESPERADO (VALUE BETTING PORTFOLIO)
+   [✓] MEJOR APUESTA DE VALOR (EV+ PICK):
+       -> Mercado: [Ej. OVER 9.5 CÓRNERS / VICTORIA VISITANTE] @ Cuota [X.XX]
+       -> Probabilidad AP Engine: [XX.X%] vs Probabilidad Bookie: [XX.X%]
+       -> Ventaja Matemática (Edge): +[XX.XX]% EV
+       -> Gestión de Capital (Half-Kelly): Apostar $[XX.XX] USD ([X.X]% del Bankroll)
+
+   [!] APUESTA SEGURA (MAYOR PROBABILIDAD ESTÁTICA):
+       -> Mercado: [Ej. DOBLE OPORTUNIDAD LOCAL O EMPATE] (Prob: [XX.X%])
+       -> *Nota: No necesariamente representa la apuesta financieramente más rentable.*
+
+3. TOP 3 PICKS COMPLEMENTARIOS DEL ENCUENTRO
+   1. [Mercado A] - Cuota [X.XX] (EV: +[X.XX]%)
+   2. [Mercado B] - Cuota [X.XX] (EV: +[X.XX]%)
+   3. [Mercado C] - Cuota [X.XX] (EV: +[X.XX]%)
+================================================================================
