@@ -7,7 +7,7 @@ def crear_base_de_datos():
     conn = sqlite3.connect('data/ap_engine.db')
     cursor = conn.cursor()
 
-    # Tabla de Partidos (Entradas)
+    # 1. Tabla de Partidos (Entradas)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS partidos (
         id_partido INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +29,7 @@ def crear_base_de_datos():
     )
     ''')
 
-    # Tabla de Predicciones y Apuestas (Salidas)
+    # 2. Tabla de Predicciones y Apuestas (Salidas)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS historial_predicciones (
         id_prediccion INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,9 +49,19 @@ def crear_base_de_datos():
     )
     ''')
 
+    # 3. NUEVA TABLA V2.0: Ranking Dinámico de Puntuación Elo
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ranking_elo (
+        equipo TEXT PRIMARY KEY,
+        puntuacion_elo REAL DEFAULT 1500.0, -- Todos los equipos empiezan con 1500 puntos por defecto
+        partidos_jugados INTEGER DEFAULT 0,
+        ultima_actualizacion TEXT
+    )
+    ''')
+
     conn.commit()
     conn.close()
 
 if __name__ == '__main__':
     crear_base_de_datos()
-    print("¡Base de datos y tablas verificadas con éxito!")
+    print("¡Base de datos verificada con éxito, incluyendo tabla ranking_elo!")
